@@ -213,7 +213,7 @@ class ViewsConfiguratorMixin(object):
         match_param=None,
         check_csrf=None,
         require_csrf=None,
-        exception_only=False,
+        exception=None,
         **view_options):
         """ Add a :term:`view configuration` to the current
         configuration state.  Arguments to ``add_view`` are broken
@@ -503,7 +503,26 @@ class ViewsConfiguratorMixin(object):
           if the :term:`context` provides the represented interface;
           it is otherwise false.  This argument may also be provided
           to ``add_view`` as ``for_`` (an older, still-supported
-          spelling).
+          spelling). If the view should **only** match when handling
+          exceptions then use the ``exception`` argument instead of
+          ``context``.
+
+        exception
+
+          .. versionadded:: 1.8
+
+          An object or a :term:`dotted Python name` referring to an
+          interface or class object that an exception must be an instance of,
+          or the :term:`interface` that an exception must provide in order
+          for this view to be found and called. This predicate is true when
+          the :term:`context` is an instance of the represented class or if
+          the :term:`context` provides the represented interface; it is
+          otherwise false. The actual exception object is provided to the
+          view as the ``context`` argument or ``request.exception``. This
+          argument conflicts with ``context`` and should be used if the view
+          is an :term:`exception view`. If this option is used instead of
+          ``context`` then the :term:`view deriver` pipeline will be able
+          to optimize itself on that information.
 
         route_name
 
@@ -685,7 +704,7 @@ class ViewsConfiguratorMixin(object):
                 obsoletes this argument, but it is kept around for backwards
                 compatibility.
 
-        view_options:
+        view_options
 
           Pass a key/value pair here to use a third-party predicate or set a
           value for a view deriver. See
@@ -701,14 +720,6 @@ class ViewsConfiguratorMixin(object):
 
              Support setting view deriver options. Previously, only custom
              view predicate values could be supplied.
-
-        exception_only
-
-          .. versionadded:: 1.8
-
-          A boolean indicating whether the view is registered only as an
-          exception view. When this argument is true, the view context must
-          be an exception.
 
         """
         if custom_predicates:
@@ -738,6 +749,7 @@ class ViewsConfiguratorMixin(object):
         view = self.maybe_dotted(view)
         context = self.maybe_dotted(context)
         for_ = self.maybe_dotted(for_)
+        exception = self.maybe_dotted(exception)
         containment = self.maybe_dotted(containment)
         mapper = self.maybe_dotted(mapper)
 
@@ -768,13 +780,17 @@ class ViewsConfiguratorMixin(object):
                 raise ConfigurationError(
                     'request_type must be an interface, not %s' % request_type)
 
-        if exception_only and not isexception(context):
-            raise ConfigurationError(
-                'context must be an exception when exception_only is true'
-                )
-
         if context is None:
             context = for_
+
+        if exception is not None:
+            if context is not None:
+                raise ConfigurationError('view "context" and "exception" '
+                                         'arguments are mutually exclusive')
+            if not isexception(exception):
+                raise ConfigurationError('view "exception" must be an '
+                                         'exception type')
+            context = exception
 
         r_context = context
         if r_context is None:
@@ -849,6 +865,7 @@ class ViewsConfiguratorMixin(object):
         view_intr.update(dict(
             name=name,
             context=context,
+            exception=exception,
             containment=containment,
             request_param=request_param,
             request_methods=request_method,
@@ -904,6 +921,7 @@ class ViewsConfiguratorMixin(object):
                 predicates=preds,
                 attr=attr,
                 context=context,
+                exception=exception,
                 renderer=renderer,
                 wrapper_viewname=wrapper,
                 viewname=name,
@@ -957,7 +975,7 @@ class ViewsConfiguratorMixin(object):
                     view_iface = ISecuredView
                 else:
                     view_iface = IView
-                if not exception_only:
+                if exception is None:
                     self.registry.registerAdapter(
                         derived_view,
                         (IViewClassifier, request_iface, context),
@@ -1351,7 +1369,7 @@ class ViewsConfiguratorMixin(object):
                      viewname=None, accept=None, order=MAX_ORDER,
                      phash=DEFAULT_PHASH, decorator=None, route_name=None,
                      mapper=None, http_cache=None, context=None,
-                     require_csrf=None, extra_options=None):
+                     require_csrf=None, exception=None, extra_options=None):
         view = self.maybe_dotted(view)
         mapper = self.maybe_dotted(mapper)
         if isinstance(renderer, string_types):
@@ -1369,6 +1387,7 @@ class ViewsConfiguratorMixin(object):
         options = dict(
             view=view,
             context=context,
+            exception=exception,
             permission=permission,
             attr=attr,
             renderer=renderer,
@@ -1444,13 +1463,18 @@ class ViewsConfiguratorMixin(object):
         view will be invoked.  Unlike
         :meth:`pyramid.config.Configurator.add_view`, this method will raise
         an exception if passed ``name``, ``permission``, ``context``,
-        ``for_``, or ``http_cache`` keyword arguments.  These argument values
-        make no sense in the context of a forbidden view.
+        ``for_``, ``exception``, or ``http_cache`` keyword arguments. These
+        argument values make no sense in the context of a forbidden
+        :term:`exception view`.
 
         .. versionadded:: 1.3
+
+        .. versionchanged:: 1.8
+           The view is created using ``exception=HTTPForbidden`` instead of
+           ``context=HTTPForbidden`` to enable exception-only optimizations.
         """
         for arg in (
-            'name', 'permission', 'context', 'for_', 'http_cache',
+            'name', 'permission', 'context', 'for_', 'exception', 'http_cache',
             'require_csrf',
         ):
             if arg in view_options:
@@ -1464,7 +1488,7 @@ class ViewsConfiguratorMixin(object):
 
         settings = dict(
             view=view,
-            context=HTTPForbidden,
+            exception=HTTPForbidden,
             wrapper=wrapper,
             request_type=request_type,
             request_method=request_method,
@@ -1513,9 +1537,9 @@ class ViewsConfiguratorMixin(object):
         append_slash=False,
         **view_options
         ):
-        """ Add a default Not Found View to the current configuration state.
-        The view will be called when Pyramid or application code raises an
-        :exc:`pyramid.httpexceptions.HTTPNotFound` exception (e.g. when a
+        """ Add a default :term:`Not Found View` to the current configuration
+        state. The view will be called when Pyramid or application code raises
+        an :exc:`pyramid.httpexceptions.HTTPNotFound` exception (e.g. when a
         view cannot be found for the request).  The simplest example is:
 
           .. code-block:: python
@@ -1534,8 +1558,8 @@ class ViewsConfiguratorMixin(object):
         view will be invoked.  Unlike
         :meth:`pyramid.config.Configurator.add_view`, this method will raise
         an exception if passed ``name``, ``permission``, ``context``,
-        ``for_``, or ``http_cache`` keyword arguments.  These argument values
-        make no sense in the context of a Not Found View.
+        ``for_``, ``exception``, or ``http_cache`` keyword arguments. These
+        argument values make no sense in the context of a Not Found View.
 
         If ``append_slash`` is ``True``, when this Not Found View is invoked,
         and the current path info does not end in a slash, the notfound logic
@@ -1562,11 +1586,16 @@ class ViewsConfiguratorMixin(object):
         being used, :class:`~pyramid.httpexceptions.HTTPMovedPermanently will
         be used` for the redirect response if a slash-appended route is found.
 
-        .. versionchanged:: 1.6
         .. versionadded:: 1.3
+
+        .. versionchanged:: 1.6
+
+        .. versionchanged:: 1.8
+           The view is created using ``exception=HTTPNotFound`` instead of
+           ``context=HTTPNotFound`` to enable exception-only optimizations.
         """
         for arg in (
-            'name', 'permission', 'context', 'for_', 'http_cache',
+            'name', 'permission', 'context', 'for_', 'exception', 'http_cache',
             'require_csrf',
         ):
             if arg in view_options:
@@ -1580,7 +1609,7 @@ class ViewsConfiguratorMixin(object):
 
         settings = dict(
             view=view,
-            context=HTTPNotFound,
+            exception=HTTPNotFound,
             wrapper=wrapper,
             request_type=request_type,
             request_method=request_method,
@@ -1620,7 +1649,7 @@ class ViewsConfiguratorMixin(object):
     def add_exception_view(
         self,
         view=None,
-        context=None,
+        exception=None,
         attr=None,
         renderer=None,
         wrapper=None,
@@ -1639,26 +1668,26 @@ class ViewsConfiguratorMixin(object):
         match_param=None,
         **view_options
             ):
-        """ Add a view for an exception to the current configuration state.
-        The view will be called when Pyramid or application code raises an
-        the given exception.
+        """ Add an :term:`exception view` for the specified ``exception`` to
+        the current configuration state. The view will be called when Pyramid
+        or application code raises the given exception.
 
         .. versionadded:: 1.8
         """
         for arg in (
-            'name', 'permission', 'for_', 'http_cache',
-            'require_csrf', 'exception_only',
+            'name', 'permission', 'context', 'for_', 'http_cache',
+            'require_csrf',
         ):
             if arg in view_options:
                 raise ConfigurationError(
                     '%s may not be used as an argument to add_exception_view'
                     % arg
                     )
-        if context is None:
-            raise ConfigurationError('context exception must be specified')
+        if exception is None:
+            raise ConfigurationError('"exception" must be specified for view')
         settings = dict(
             view=view,
-            context=context,
+            exception=exception,
             wrapper=wrapper,
             renderer=renderer,
             request_type=request_type,
@@ -1676,7 +1705,6 @@ class ViewsConfiguratorMixin(object):
             route_name=route_name,
             permission=NO_PERMISSION_REQUIRED,
             require_csrf=False,
-            exception_only=True,
             )
         return self.add_view(**settings)
 

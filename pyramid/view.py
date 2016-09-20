@@ -166,7 +166,7 @@ class view_config(object):
              :class:`pyramid.view.bfg_view`.
 
     :class:`pyramid.view.view_config` supports the following keyword
-    arguments: ``context``, ``permission``, ``name``,
+    arguments: ``context``, ``exception``, ``permission``, ``name``,
     ``request_type``, ``route_name``, ``request_method``, ``request_param``,
     ``containment``, ``xhr``, ``accept``, ``header``, ``path_info``,
     ``custom_predicates``, ``decorator``, ``mapper``, ``http_cache``,
@@ -325,7 +325,8 @@ class notfound_view_config(object):
     .. versionadded:: 1.3
 
     An analogue of :class:`pyramid.view.view_config` which registers a
-    :term:`Not Found View`.
+    :term:`Not Found View` using
+    :meth:`pyramid.config.Configurator.add_notfound_view`.
 
     The ``notfound_view_config`` constructor accepts most of the same arguments
     as the constructor of :class:`pyramid.view.view_config`.  It can be used
@@ -413,7 +414,8 @@ class forbidden_view_config(object):
     .. versionadded:: 1.3
 
     An analogue of :class:`pyramid.view.view_config` which registers a
-    :term:`forbidden view`.
+    :term:`forbidden view` using
+    :meth:`pyramid.config.Configurator.add_forbidden_view`.
 
     The forbidden_view_config constructor accepts most of the same arguments
     as the constructor of :class:`pyramid.view.view_config`.  It can be used
@@ -468,7 +470,8 @@ class exception_view_config(object):
     .. versionadded:: 1.8
 
     An analogue of :class:`pyramid.view.view_config` which registers an
-    exception view.
+    :term:`exception view` using
+    :meth:`pyramid.config.Configurator.add_exception_view`.
 
     The exception_view_config constructor requires an exception context, and
     additionally accepts most of the same arguments as the constructor of
@@ -483,9 +486,9 @@ class exception_view_config(object):
         from pyramid.view import exception_view_config
         from pyramid.response import Response
 
-        @exception_view_config(context=ValueError, renderer='json')
-        def error_view(context, request):
-            return {'error': str(context)}
+        @exception_view_config(exception=ValueError, renderer='json')
+        def error_view(request):
+            return {'error': str(request.exception)}
 
     All arguments passed to this function have the same meaning as
     :meth:`pyramid.view.view_config` and each predicate argument restricts

@@ -20,15 +20,16 @@ class TestViewsConfigurationMixin(unittest.TestCase):
         config = Configurator(*arg, **kw)
         return config
 
-    def _getViewCallable(self, config, ctx_iface=None, request_iface=None,
-                         name='', exception_view=False):
+    def _getViewCallable(self, config, ctx_iface=None, exc_iface=None,
+                         request_iface=None, name=''):
         from zope.interface import Interface
         from pyramid.interfaces import IRequest
         from pyramid.interfaces import IView
         from pyramid.interfaces import IViewClassifier
         from pyramid.interfaces import IExceptionViewClassifier
-        if exception_view:
+        if exc_iface:
             classifier = IExceptionViewClassifier
+            ctx_iface = exc_iface
         else:
             classifier = IViewClassifier
         if ctx_iface is None:
@@ -489,7 +490,7 @@ class TestViewsConfigurationMixin(unittest.TestCase):
         config.add_view(view=newview, xhr=True, context=RuntimeError,
                         renderer=null_renderer)
         wrapper = self._getViewCallable(
-            config, ctx_iface=implementedBy(RuntimeError), exception_view=True)
+            config, exc_iface=implementedBy(RuntimeError))
         self.assertFalse(IMultiView.providedBy(wrapper))
         request = DummyRequest()
         request.is_xhr = True
@@ -533,7 +534,7 @@ class TestViewsConfigurationMixin(unittest.TestCase):
         config.add_view(view=newview, context=RuntimeError,
                         renderer=null_renderer)
         wrapper = self._getViewCallable(
-            config, ctx_iface=implementedBy(RuntimeError), exception_view=True)
+            config, exc_iface=implementedBy(RuntimeError))
         self.assertFalse(IMultiView.providedBy(wrapper))
         request = DummyRequest()
         request.is_xhr = True
@@ -581,7 +582,7 @@ class TestViewsConfigurationMixin(unittest.TestCase):
         config.add_view(view=newview, context=RuntimeError,
                         renderer=null_renderer)
         wrapper = self._getViewCallable(
-            config, ctx_iface=implementedBy(RuntimeError), exception_view=True)
+            config, exc_iface=implementedBy(RuntimeError))
         self.assertFalse(IMultiView.providedBy(wrapper))
         request = DummyRequest()
         request.is_xhr = True
@@ -626,7 +627,7 @@ class TestViewsConfigurationMixin(unittest.TestCase):
         config.add_view(view=view, context=RuntimeError,
                         renderer=null_renderer)
         wrapper = self._getViewCallable(
-            config, ctx_iface=implementedBy(RuntimeError), exception_view=True)
+            config, exc_iface=implementedBy(RuntimeError))
         self.assertTrue(IMultiView.providedBy(wrapper))
         self.assertEqual(wrapper(None, None), 'OK')
 
@@ -669,7 +670,7 @@ class TestViewsConfigurationMixin(unittest.TestCase):
             ISecuredView, name='')
         config.add_view(view=view, context=RuntimeError, renderer=null_renderer)
         wrapper = self._getViewCallable(
-            config, ctx_iface=implementedBy(RuntimeError), exception_view=True)
+            config, exc_iface=implementedBy(RuntimeError))
         self.assertTrue(IMultiView.providedBy(wrapper))
         self.assertEqual(wrapper(None, None), 'OK')
 
@@ -755,7 +756,7 @@ class TestViewsConfigurationMixin(unittest.TestCase):
         config.add_view(view=view2, accept='text/html', context=RuntimeError,
                         renderer=null_renderer)
         wrapper = self._getViewCallable(
-            config, ctx_iface=implementedBy(RuntimeError), exception_view=True)
+            config, exc_iface=implementedBy(RuntimeError))
         self.assertTrue(IMultiView.providedBy(wrapper))
         self.assertEqual(len(wrapper.views), 1)
         self.assertEqual(len(wrapper.media_views), 1)
@@ -816,7 +817,7 @@ class TestViewsConfigurationMixin(unittest.TestCase):
         config.add_view(view=view2, context=RuntimeError,
                         renderer=null_renderer)
         wrapper = self._getViewCallable(
-            config, ctx_iface=implementedBy(RuntimeError), exception_view=True)
+            config, exc_iface=implementedBy(RuntimeError))
         self.assertTrue(IMultiView.providedBy(wrapper))
         self.assertEqual(len(wrapper.views), 1)
         self.assertEqual(len(wrapper.media_views), 1)
@@ -864,7 +865,7 @@ class TestViewsConfigurationMixin(unittest.TestCase):
         config.add_view(view=view2, context=RuntimeError,
                         renderer=null_renderer)
         wrapper = self._getViewCallable(
-            config, ctx_iface=implementedBy(RuntimeError), exception_view=True)
+            config, exc_iface=implementedBy(RuntimeError))
         self.assertTrue(IMultiView.providedBy(wrapper))
         self.assertEqual([x[:2] for x in wrapper.views], [(view2, None)])
         self.assertEqual(wrapper(None, None), 'OK1')
@@ -886,10 +887,12 @@ class TestViewsConfigurationMixin(unittest.TestCase):
         config.registry.registerAdapter(
             view, (IViewClassifier, IRequest, ISuper), IView, name='')
         config.add_view(view=view2, for_=ISub, renderer=null_renderer)
-        wrapper = self._getViewCallable(config, ISuper, IRequest)
+        wrapper = self._getViewCallable(config, ctx_iface=ISuper,
+                                        request_iface=IRequest)
         self.assertFalse(IMultiView.providedBy(wrapper))
         self.assertEqual(wrapper(None, None), 'OK')
-        wrapper = self._getViewCallable(config, ISub, IRequest)
+        wrapper = self._getViewCallable(config, ctx_iface=ISub,
+                                        request_iface=IRequest)
         self.assertFalse(IMultiView.providedBy(wrapper))
         self.assertEqual(wrapper(None, None), 'OK2')
 
@@ -914,16 +917,16 @@ class TestViewsConfigurationMixin(unittest.TestCase):
             view, (IExceptionViewClassifier, IRequest, Super), IView, name='')
         config.add_view(view=view2, for_=Sub, renderer=null_renderer)
         wrapper = self._getViewCallable(
-            config, implementedBy(Super), IRequest)
+            config, ctx_iface=implementedBy(Super), request_iface=IRequest)
         wrapper_exc_view = self._getViewCallable(
-            config, implementedBy(Super), IRequest, exception_view=True)
+            config, exc_iface=implementedBy(Super), request_iface=IRequest)
         self.assertEqual(wrapper_exc_view, wrapper)
         self.assertFalse(IMultiView.providedBy(wrapper_exc_view))
         self.assertEqual(wrapper_exc_view(None, None), 'OK')
         wrapper = self._getViewCallable(
-            config, implementedBy(Sub), IRequest)
+            config, ctx_iface=implementedBy(Sub), request_iface=IRequest)
         wrapper_exc_view = self._getViewCallable(
-            config, implementedBy(Sub), IRequest, exception_view=True)
+            config, exc_iface=implementedBy(Sub), request_iface=IRequest)
         self.assertEqual(wrapper_exc_view, wrapper)
         self.assertFalse(IMultiView.providedBy(wrapper_exc_view))
         self.assertEqual(wrapper_exc_view(None, None), 'OK2')
@@ -1233,8 +1236,8 @@ class TestViewsConfigurationMixin(unittest.TestCase):
                         renderer=null_renderer)
         request_iface = self._getRouteRequestIface(config, 'foo')
         wrapper_exc_view = self._getViewCallable(
-            config, ctx_iface=implementedBy(RuntimeError),
-            request_iface=request_iface, exception_view=True)
+            config, exc_iface=implementedBy(RuntimeError),
+            request_iface=request_iface)
         self.assertNotEqual(wrapper_exc_view, None)
         wrapper = self._getViewCallable(
             config, ctx_iface=implementedBy(RuntimeError),
@@ -1820,8 +1823,7 @@ class TestViewsConfigurationMixin(unittest.TestCase):
         from pyramid.renderers import null_renderer
         view1 = lambda *arg: 'OK'
         config = self._makeOne(autocommit=True)
-        config.add_view(view=view1, context=Exception, renderer=null_renderer,
-                        exception_only=True)
+        config.add_view(view=view1, exception=Exception, renderer=null_renderer)
         view = self._getViewCallable(config, ctx_iface=implementedBy(Exception))
         self.assertTrue(view is None)
 
@@ -1830,11 +1832,9 @@ class TestViewsConfigurationMixin(unittest.TestCase):
         from pyramid.renderers import null_renderer
         view1 = lambda *arg: 'OK'
         config = self._makeOne(autocommit=True)
-        config.add_view(view=view1, context=Exception, renderer=null_renderer,
-                        exception_only=True)
+        config.add_view(view=view1, exception=Exception, renderer=null_renderer)
         view = self._getViewCallable(
-            config, ctx_iface=implementedBy(Exception), exception_view=True
-            )
+            config, exc_iface=implementedBy(Exception))
         self.assertEqual(view1, view)
 
     def test_add_view_exception_only_misconfiguration(self):
@@ -1844,19 +1844,24 @@ class TestViewsConfigurationMixin(unittest.TestCase):
             pass
         self.assertRaises(
             ConfigurationError,
-            config.add_view, view, context=NotAnException, exception_only=True
-            )
+            config.add_view, view, exception=NotAnException)
+
+    def test_add_view_exception_only_conflicts_with_context(self):
+        view = lambda *arg: 'OK'
+        config = self._makeOne(autocommit=True)
+        self.assertRaises(
+            ConfigurationError,
+            config.add_view, view, exception=Exception, context=Exception)
 
     def test_add_exception_view(self):
         from zope.interface import implementedBy
-        from pyramid.interfaces import IRequest
         from pyramid.renderers import null_renderer
         view1 = lambda *arg: 'OK'
         config = self._makeOne(autocommit=True)
-        config.add_exception_view(view=view1, context=Exception, renderer=null_renderer)
+        config.add_exception_view(view=view1, exception=Exception,
+                                  renderer=null_renderer)
         wrapper = self._getViewCallable(
-            config, ctx_iface=implementedBy(Exception), exception_view=True,
-            )
+            config, exc_iface=implementedBy(Exception))
         context = Exception()
         request = self._makeRequest(config)
         self.assertEqual(wrapper(context, request), 'OK')
@@ -1905,12 +1910,11 @@ class TestViewsConfigurationMixin(unittest.TestCase):
     def test_add_exception_view_with_view_defaults(self):
         from pyramid.renderers import null_renderer
         from pyramid.exceptions import PredicateMismatch
-        from pyramid.httpexceptions import HTTPNotFound
         from zope.interface import directlyProvides
         from zope.interface import implementedBy
         class view(object):
             __view_defaults__ = {
-                'containment':'pyramid.tests.test_config.IDummy'
+                'containment': 'pyramid.tests.test_config.IDummy'
                 }
             def __init__(self, request):
                 pass
@@ -1919,10 +1923,10 @@ class TestViewsConfigurationMixin(unittest.TestCase):
         config = self._makeOne(autocommit=True)
         config.add_exception_view(
             view=view,
-            context=Exception,
+            exception=Exception,
             renderer=null_renderer)
         wrapper = self._getViewCallable(
-            config, ctx_iface=implementedBy(Exception), exception_view=True)
+            config, exc_iface=implementedBy(Exception))
         context = DummyContext()
         directlyProvides(context, IDummy)
         request = self._makeRequest(config)
@@ -2043,7 +2047,7 @@ class TestViewsConfigurationMixin(unittest.TestCase):
         config.add_forbidden_view(view, renderer=null_renderer)
         request = self._makeRequest(config)
         view = self._getViewCallable(config,
-                                     ctx_iface=implementedBy(HTTPForbidden),
+                                     exc_iface=implementedBy(HTTPForbidden),
                                      request_iface=IRequest)
         result = view(None, request)
         self.assertEqual(result, 'OK')
@@ -2057,7 +2061,7 @@ class TestViewsConfigurationMixin(unittest.TestCase):
         config.add_forbidden_view()
         request = self._makeRequest(config)
         view = self._getViewCallable(config,
-                                     ctx_iface=implementedBy(HTTPForbidden),
+                                     exc_iface=implementedBy(HTTPForbidden),
                                      request_iface=IRequest)
         context = HTTPForbidden()
         result = view(context, request)
@@ -2084,6 +2088,11 @@ class TestViewsConfigurationMixin(unittest.TestCase):
         config = self._makeOne(autocommit=True)
         self.assertRaises(ConfigurationError,
                           config.add_forbidden_view, context='foo')
+
+    def test_add_forbidden_view_disallows_exception(self):
+        config = self._makeOne(autocommit=True)
+        self.assertRaises(ConfigurationError,
+                          config.add_forbidden_view, exception='foo')
 
     def test_add_forbidden_view_disallows_for_(self):
         config = self._makeOne(autocommit=True)
@@ -2115,7 +2124,7 @@ class TestViewsConfigurationMixin(unittest.TestCase):
             view=view,
             renderer=null_renderer)
         wrapper = self._getViewCallable(
-            config, ctx_iface=implementedBy(HTTPForbidden),
+            config, exc_iface=implementedBy(HTTPForbidden),
             request_iface=IRequest)
         context = DummyContext()
         directlyProvides(context, IDummy)
@@ -2135,7 +2144,7 @@ class TestViewsConfigurationMixin(unittest.TestCase):
         config.add_notfound_view(view, renderer=null_renderer)
         request = self._makeRequest(config)
         view = self._getViewCallable(config,
-                                     ctx_iface=implementedBy(HTTPNotFound),
+                                     exc_iface=implementedBy(HTTPNotFound),
                                      request_iface=IRequest)
         result = view(None, request)
         self.assertEqual(result, (None, request))
@@ -2149,7 +2158,7 @@ class TestViewsConfigurationMixin(unittest.TestCase):
         config.add_notfound_view()
         request = self._makeRequest(config)
         view = self._getViewCallable(config,
-                                     ctx_iface=implementedBy(HTTPNotFound),
+                                     exc_iface=implementedBy(HTTPNotFound),
                                      request_iface=IRequest)
         context = HTTPNotFound()
         result = view(context, request)
@@ -2177,6 +2186,11 @@ class TestViewsConfigurationMixin(unittest.TestCase):
         self.assertRaises(ConfigurationError,
                           config.add_notfound_view, context='foo')
 
+    def test_add_notfound_view_disallows_exception(self):
+        config = self._makeOne(autocommit=True)
+        self.assertRaises(ConfigurationError,
+                          config.add_notfound_view, exception='foo')
+
     def test_add_notfound_view_disallows_for_(self):
         config = self._makeOne(autocommit=True)
         self.assertRaises(ConfigurationError,
@@ -2202,7 +2216,7 @@ class TestViewsConfigurationMixin(unittest.TestCase):
         request.query_string = 'a=1&b=2'
         request.path = '/scriptname/foo'
         view = self._getViewCallable(config,
-                                     ctx_iface=implementedBy(HTTPNotFound),
+                                     exc_iface=implementedBy(HTTPNotFound),
                                      request_iface=IRequest)
         result = view(None, request)
         self.assertTrue(isinstance(result, HTTPFound))
@@ -2225,7 +2239,7 @@ class TestViewsConfigurationMixin(unittest.TestCase):
         request.query_string = 'a=1&b=2'
         request.path = '/scriptname/foo'
         view = self._getViewCallable(config,
-                                     ctx_iface=implementedBy(HTTPNotFound),
+                                     exc_iface=implementedBy(HTTPNotFound),
                                      request_iface=IRequest)
         result = view(None, request)
         self.assertTrue(isinstance(result, HTTPMovedPermanently))
@@ -2251,7 +2265,7 @@ class TestViewsConfigurationMixin(unittest.TestCase):
             view=view,
             renderer=null_renderer)
         wrapper = self._getViewCallable(
-            config, ctx_iface=implementedBy(HTTPNotFound),
+            config, exc_iface=implementedBy(HTTPNotFound),
             request_iface=IRequest)
         context = DummyContext()
         directlyProvides(context, IDummy)
@@ -2281,7 +2295,7 @@ class TestViewsConfigurationMixin(unittest.TestCase):
             renderer='json')
         request = self._makeRequest(config)
         view = self._getViewCallable(config,
-                                     ctx_iface=implementedBy(HTTPNotFound),
+                                     exc_iface=implementedBy(HTTPNotFound),
                                      request_iface=IRequest)
         result = view(None, request)
         self._assertBody(result, '{}')
@@ -2298,7 +2312,7 @@ class TestViewsConfigurationMixin(unittest.TestCase):
             renderer='json')
         request = self._makeRequest(config)
         view = self._getViewCallable(config,
-                                     ctx_iface=implementedBy(HTTPForbidden),
+                                     exc_iface=implementedBy(HTTPForbidden),
                                      request_iface=IRequest)
         result = view(None, request)
         self._assertBody(result, '{}')
