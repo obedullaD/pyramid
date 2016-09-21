@@ -787,10 +787,12 @@ class ViewsConfiguratorMixin(object):
             if context is not None:
                 raise ConfigurationError('view "context" and "exception" '
                                          'arguments are mutually exclusive')
-            if not isexception(exception):
-                raise ConfigurationError('view "exception" must be an '
-                                         'exception type')
             context = exception
+
+        isexc = isexception(context)
+        if not isexc and exception is not None:
+            raise ConfigurationError(
+                'view "exception" must be an exception type')
 
         r_context = context
         if r_context is None:
@@ -963,12 +965,11 @@ class ViewsConfiguratorMixin(object):
             old_view = None
 
             for view_type in (IView, ISecuredView, IMultiView):
-                old_view = registered((IViewClassifier, request_iface,
-                                       r_context), view_type, name)
+                old_view = registered(
+                    (IViewClassifier, request_iface, r_context),
+                    view_type, name)
                 if old_view is not None:
                     break
-
-            isexc = isexception(context)
 
             def regclosure():
                 if hasattr(derived_view, '__call_permissive__'):
