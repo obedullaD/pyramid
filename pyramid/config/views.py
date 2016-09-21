@@ -9,11 +9,9 @@ from zope.interface import (
     implementedBy,
     implementer,
     )
-
 from zope.interface.interfaces import IInterface
 
 from pyramid.interfaces import (
-    IException,
     IExceptionViewClassifier,
     IMultiView,
     IPackageOverrides,
@@ -45,6 +43,7 @@ from pyramid.compat import (
 from pyramid.decorator import reify
 
 from pyramid.exceptions import (
+    isexception,
     ConfigurationError,
     PredicateMismatch,
     )
@@ -1880,15 +1879,6 @@ class ViewsConfiguratorMixin(object):
             info = StaticURLInfo()
             self.registry.registerUtility(info, IStaticURLInfo)
         return info
-
-def isexception(o):
-    if IInterface.providedBy(o):
-        if IException.isEqualOrExtendedBy(o):
-            return True
-    return (
-        isinstance(o, Exception) or
-        (inspect.isclass(o) and (issubclass(o, Exception)))
-        )
 
 @implementer(IViewDeriverInfo)
 class ViewDeriverInfo(object):

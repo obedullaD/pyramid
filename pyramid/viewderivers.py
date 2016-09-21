@@ -35,6 +35,7 @@ from pyramid.config.util import (
     )
 
 from pyramid.exceptions import (
+    isexception,
     ConfigurationError,
     PredicateMismatch,
     )
@@ -286,18 +287,16 @@ def _secured_view(view, info):
     authn_policy = info.registry.queryUtility(IAuthenticationPolicy)
     authz_policy = info.registry.queryUtility(IAuthorizationPolicy)
 
+    # no-op on exception-only views without an explicit permission
+    if explicit_val is None and info.options.get('exception') is not None:
+        return view
+
     if authn_policy and authz_policy and (permission is not None):
-        def _permitted(context, request):
+        def permitted(context, request):
             principals = authn_policy.effective_principals(request)
             return authz_policy.permits(context, principals, permission)
-        def _secured_view(context, request):
-            if (
-                getattr(request, 'exception', None) is not None and
-                explicit_val is None
-            ):
-                return view(context, request)
-
-            result = _permitted(context, request)
+        def secured_view(context, request):
+            result = permitted(context, request)
             if result:
                 return view(context, request)
             view_name = getattr(view, '__name__', view)
@@ -305,10 +304,21 @@ def _secured_view(view, info):
                 request, 'authdebug_message',
                 'Unauthorized: %s failed permission check' % view_name)
             raise HTTPForbidden(msg, result=result)
-        _secured_view.__call_permissive__ = view
-        _secured_view.__permitted__ = _permitted
-        _secured_view.__permission__ = permission
-        wrapped_view = _secured_view
+        # check for exceptions per-request if view could handle an exception
+        if isexception(info.options.get('context')):
+            def exc_secured_view(context, request):
+                if (
+                    explicit_val is None and
+                    getattr(request, 'exception', None) is not None
+                ):
+                    return view(context, request)
+                return secured_view(context, request)
+            wrapped_view = exc_secured_view
+        else:
+            wrapped_view = secured_view
+        wrapped_view.__call_permissive__ = view
+        wrapped_view.__permitted__ = permitted
+        wrapped_view.__permission__ = permission
 
     return wrapped_view
 
@@ -321,14 +331,13 @@ def _authdebug_view(view, info):
     authn_policy = info.registry.queryUtility(IAuthenticationPolicy)
     authz_policy = info.registry.queryUtility(IAuthorizationPolicy)
     logger = info.registry.queryUtility(IDebugLogger)
-    if settings and settings.get('debug_authorization', False):
-        def _authdebug_view(context, request):
-            if (
-                getattr(request, 'exception', None) is not None and
-                explicit_val is None
-            ):
-                return view(context, request)
 
+    # no-op on exception-only views without an explicit permission
+    if explicit_val is None and info.options.get('exception') is not None:
+        return view
+
+    if settings and settings.get('debug_authorization', False):
+        def authdebug_view(context, request):
             view_name = getattr(request, 'view_name', None)
 
             if authn_policy and authz_policy:
@@ -352,8 +361,18 @@ def _authdebug_view(view, info):
             if request is not None:
                 request.authdebug_message = msg
             return view(context, request)
-
-        wrapped_view = _authdebug_view
+        # check for exceptions per-request if view could handle an exception
+        if isexception(info.options.get('context')):
+            def exc_authdebug_view(context, request):
+                if (
+                    explicit_val is None and
+                    getattr(request, 'exception', None) is not None
+                ):
+                    return view(context, request)
+                return authdebug_view(context, request)
+            wrapped_view = exc_authdebug_view
+        else:
+            wrapped_view = authdebug_view
 
     return wrapped_view
 
@@ -490,6 +509,7 @@ def csrf_view(view, info):
         token = defaults.token
         header = defaults.header
         safe_methods = defaults.safe_methods
+
     enabled = (
         explicit_val is True or
         (explicit_val is not False and default_val)
@@ -499,18 +519,23 @@ def csrf_view(view, info):
     wrapped_view = view
     if enabled:
         def csrf_view(context, request):
-            if (
-                request.method not in safe_methods and
-                (
-                    # skip exception views unless value is explicitly defined
-                    getattr(request, 'exception', None) is None or
-                    explicit_val is not None
-                )
-            ):
+            if request.method not in safe_methods:
                 check_csrf_origin(request, raises=True)
                 check_csrf_token(request, token, header, raises=True)
             return view(context, request)
-        wrapped_view = csrf_view
+        # check for exceptions per-request if view could handle an exception
+        if isexception(info.options.get('context')):
+            def exc_csrf_view(context, request):
+                if (
+                    # skip exception views unless value is explicitly defined
+                    explicit_val is None and
+                    getattr(request, 'exception', None) is not None
+                ):
+                    return view(context, request)
+                return csrf_view(context, request)
+            wrapped_view = exc_csrf_view
+        else:
+            wrapped_view = csrf_view
     return wrapped_view
 
 csrf_view.options = ('require_csrf',)

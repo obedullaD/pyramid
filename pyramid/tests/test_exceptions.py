@@ -92,3 +92,28 @@ class TestCyclicDependencyError(unittest.TestCase):
         self.assertTrue("'c' sorts before ['a']" in result)
 
 
+class Test_isexception(unittest.TestCase):
+    def _callFUT(self, ob):
+        from pyramid.exceptions import isexception
+        return isexception(ob)
+
+    def test_is_exception_instance(self):
+        class E(Exception):
+            pass
+        e = E()
+        self.assertEqual(self._callFUT(e), True)
+
+    def test_is_exception_class(self):
+        class E(Exception):
+            pass
+        self.assertEqual(self._callFUT(E), True)
+
+    def test_is_IException(self):
+        from pyramid.interfaces import IException
+        self.assertEqual(self._callFUT(IException), True)
+
+    def test_is_IException_subinterface(self):
+        from pyramid.interfaces import IException
+        class ISubException(IException):
+            pass
+        self.assertEqual(self._callFUT(ISubException), True)

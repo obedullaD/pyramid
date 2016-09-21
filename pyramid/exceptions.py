@@ -1,8 +1,12 @@
+import inspect
+from zope.interface.interfaces import IInterface
+
 from pyramid.httpexceptions import (
     HTTPBadRequest,
     HTTPNotFound,
     HTTPForbidden,
     )
+from pyramid.interfaces import IException
 
 NotFound = HTTPNotFound # bw compat
 Forbidden = HTTPForbidden # bw compat
@@ -109,6 +113,7 @@ class ConfigurationExecutionError(ConfigurationError):
     def __str__(self):
         return "%s: %s\n  in:\n  %s" % (self.etype, self.evalue, self.info)
 
+
 class CyclicDependencyError(Exception):
     """ The exception raised when the Pyramid topological sorter detects a
     cyclic dependency."""
@@ -124,3 +129,13 @@ class CyclicDependencyError(Exception):
             L.append('%r sorts before %r' % (dependent, dependees))
         msg = 'Implicit ordering cycle:' + '; '.join(L)
         return msg
+
+
+def isexception(o):
+    if IInterface.providedBy(o):
+        if IException.isEqualOrExtendedBy(o):
+            return True
+    return (
+        isinstance(o, Exception) or
+        (inspect.isclass(o) and (issubclass(o, Exception)))
+        )
