@@ -844,31 +844,71 @@ class TestViewsConfigurationMixin(unittest.TestCase):
         self.assertEqual([x[:2] for x in wrapper.views], [(view2, None)])
         self.assertEqual(wrapper(None, None), 'OK1')
 
-    def test_add_view_exc_multiview_replaces_multiview(self):
+    def test_add_view_exc_multiview_replaces_multiviews(self):
         from pyramid.renderers import null_renderer
         from zope.interface import implementedBy
         from pyramid.interfaces import IRequest
         from pyramid.interfaces import IMultiView
         from pyramid.interfaces import IViewClassifier
         from pyramid.interfaces import IExceptionViewClassifier
-        view = DummyMultiView()
+        hot_view = DummyMultiView()
+        exc_view = DummyMultiView()
         config = self._makeOne(autocommit=True)
         config.registry.registerAdapter(
-            view,
+            hot_view,
             (IViewClassifier, IRequest, implementedBy(RuntimeError)),
             IMultiView, name='')
         config.registry.registerAdapter(
-            view,
+            exc_view,
             (IExceptionViewClassifier, IRequest, implementedBy(RuntimeError)),
             IMultiView, name='')
         view2 = lambda *arg: 'OK2'
         config.add_view(view=view2, context=RuntimeError,
                         renderer=null_renderer)
-        wrapper = self._getViewCallable(
+        hot_wrapper = self._getViewCallable(
+            config, ctx_iface=implementedBy(RuntimeError))
+        self.assertTrue(IMultiView.providedBy(hot_wrapper))
+        self.assertEqual([x[:2] for x in hot_wrapper.views], [(view2, None)])
+        self.assertEqual(hot_wrapper(None, None), 'OK1')
+
+        exc_wrapper = self._getViewCallable(
             config, exc_iface=implementedBy(RuntimeError))
-        self.assertTrue(IMultiView.providedBy(wrapper))
-        self.assertEqual([x[:2] for x in wrapper.views], [(view2, None)])
-        self.assertEqual(wrapper(None, None), 'OK1')
+        self.assertTrue(IMultiView.providedBy(exc_wrapper))
+        self.assertEqual([x[:2] for x in exc_wrapper.views], [(view2, None)])
+        self.assertEqual(exc_wrapper(None, None), 'OK1')
+
+    def test_add_view_exc_multiview_replaces_only_exc_multiview(self):
+        from pyramid.renderers import null_renderer
+        from zope.interface import implementedBy
+        from pyramid.interfaces import IRequest
+        from pyramid.interfaces import IMultiView
+        from pyramid.interfaces import IViewClassifier
+        from pyramid.interfaces import IExceptionViewClassifier
+        hot_view = DummyMultiView()
+        exc_view = DummyMultiView()
+        config = self._makeOne(autocommit=True)
+        config.registry.registerAdapter(
+            hot_view,
+            (IViewClassifier, IRequest, implementedBy(RuntimeError)),
+            IMultiView, name='')
+        config.registry.registerAdapter(
+            exc_view,
+            (IExceptionViewClassifier, IRequest, implementedBy(RuntimeError)),
+            IMultiView, name='')
+        view2 = lambda *arg: 'OK2'
+        config.add_view(view=view2, exception=RuntimeError,
+                        renderer=null_renderer)
+        hot_wrapper = self._getViewCallable(
+            config, ctx_iface=implementedBy(RuntimeError))
+        self.assertTrue(IMultiView.providedBy(hot_wrapper))
+        self.assertEqual(len(hot_wrapper.views), 0)
+        self.assertEqual(hot_wrapper(None, None), 'OK1')
+
+        exc_wrapper = self._getViewCallable(
+            config, exc_iface=implementedBy(RuntimeError))
+        self.assertTrue(IMultiView.providedBy(exc_wrapper))
+        self.assertEqual([x[:2] for x in exc_wrapper.views], [(view2, None)])
+        self.assertEqual(exc_wrapper(None, None), 'OK1')
 
     def test_add_view_multiview_context_superclass_then_subclass(self):
         from pyramid.renderers import null_renderer

@@ -889,6 +889,8 @@ class ViewsConfiguratorMixin(object):
         introspectables.append(view_intr)
         predlist = self.get_predlist('view')
 
+        registered = self.registry.adapters.registered
+
         def register(permission=permission, renderer=renderer):
             request_iface = IRequest
             if route_name is not None:
@@ -942,8 +944,41 @@ class ViewsConfiguratorMixin(object):
             # see also MultiView.__discriminator__
             view_intr['derived_callable'] = derived_view
 
-            registered = self.registry.adapters.registered
+            # make a new view separately for normal and exception paths
+            view_classifiers = []
+            if exception is None:
+                view_classifiers.append(IViewClassifier)
+            if isexc:
+                view_classifiers.append(IExceptionViewClassifier)
 
+            for view_classifier in view_classifiers:
+                register_view(view_classifier, request_iface, derived_view,
+                              order, phash)
+
+            self.registry._clear_view_lookup_cache()
+            renderer_type = getattr(renderer, 'type', None) # gard against None
+            intrspc = self.introspector
+            if (
+                renderer_type is not None and
+                tmpl_intr is not None and
+                intrspc is not None and
+                intrspc.get('renderer factories', renderer_type) is not None
+                ):
+                # allow failure of registered template factories to be deferred
+                # until view execution, like other bad renderer factories; if
+                # we tried to relate this to an existing renderer factory
+                # without checking if it the factory actually existed, we'd end
+                # up with a KeyError at startup time, which is inconsistent
+                # with how other bad renderer registrations behave (they throw
+                # a ValueError at view execution time)
+                tmpl_intr.relate('renderer factories', renderer.type)
+
+        def register_view(classifier,
+                          request_iface,
+                          derived_view,
+                          order,
+                          phash,
+                          ):
             # A multiviews is a set of views which are registered for
             # exactly the same context type/request type/name triad.  Each
             # consituent view in a multiview differs only by the
@@ -966,7 +1001,7 @@ class ViewsConfiguratorMixin(object):
 
             for view_type in (IView, ISecuredView, IMultiView):
                 old_view = registered(
-                    (IViewClassifier, request_iface, r_context),
+                    (classifier, request_iface, r_context),
                     view_type, name)
                 if old_view is not None:
                     break
@@ -976,18 +1011,12 @@ class ViewsConfiguratorMixin(object):
                     view_iface = ISecuredView
                 else:
                     view_iface = IView
-                if exception is None:
-                    self.registry.registerAdapter(
-                        derived_view,
-                        (IViewClassifier, request_iface, context),
-                        view_iface,
-                        name
-                        )
-                if isexc:
-                    self.registry.registerAdapter(
-                        derived_view,
-                        (IExceptionViewClassifier, request_iface, context),
-                        view_iface, name)
+                self.registry.registerAdapter(
+                    derived_view,
+                    (classifier, request_iface, context),
+                    view_iface,
+                    name
+                    )
 
             is_multiview = IMultiView.providedBy(old_view)
             old_phash = getattr(old_view, '__phash__', DEFAULT_PHASH)
@@ -1024,39 +1053,12 @@ class ViewsConfiguratorMixin(object):
                 for view_type in (IView, ISecuredView):
                     # unregister any existing views
                     self.registry.adapters.unregister(
-                        (IViewClassifier, request_iface, r_context),
+                        (classifier, request_iface, r_context),
                         view_type, name=name)
-                    if isexc:
-                        self.registry.adapters.unregister(
-                            (IExceptionViewClassifier, request_iface,
-                             r_context), view_type, name=name)
                 self.registry.registerAdapter(
                     multiview,
-                    (IViewClassifier, request_iface, context),
+                    (classifier, request_iface, context),
                     IMultiView, name=name)
-                if isexc:
-                    self.registry.registerAdapter(
-                        multiview,
-                        (IExceptionViewClassifier, request_iface, context),
-                        IMultiView, name=name)
-
-            self.registry._clear_view_lookup_cache()
-            renderer_type = getattr(renderer, 'type', None) # gard against None
-            intrspc = self.introspector
-            if (
-                renderer_type is not None and
-                tmpl_intr is not None and
-                intrspc is not None and
-                intrspc.get('renderer factories', renderer_type) is not None
-                ):
-                # allow failure of registered template factories to be deferred
-                # until view execution, like other bad renderer factories; if
-                # we tried to relate this to an existing renderer factory
-                # without checking if it the factory actually existed, we'd end
-                # up with a KeyError at startup time, which is inconsistent
-                # with how other bad renderer registrations behave (they throw
-                # a ValueError at view execution time)
-                tmpl_intr.relate('renderer factories', renderer.type)
 
         if mapper:
             mapper_intr = self.introspectable(
