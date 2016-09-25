@@ -1,12 +1,8 @@
-import inspect
-from zope.interface.interfaces import IInterface
-
 from pyramid.httpexceptions import (
     HTTPBadRequest,
     HTTPNotFound,
     HTTPForbidden,
     )
-from pyramid.interfaces import IException
 
 NotFound = HTTPNotFound # bw compat
 Forbidden = HTTPForbidden # bw compat
@@ -129,13 +125,3 @@ class CyclicDependencyError(Exception):
             L.append('%r sorts before %r' % (dependent, dependees))
         msg = 'Implicit ordering cycle:' + '; '.join(L)
         return msg
-
-
-def isexception(o):
-    if IInterface.providedBy(o):
-        if IException.isEqualOrExtendedBy(o):
-            return True
-    return (
-        isinstance(o, Exception) or
-        (inspect.isclass(o) and (issubclass(o, Exception)))
-        )

@@ -13,6 +13,7 @@ from zope.interface.interfaces import IInterface
 
 from pyramid.interfaces import (
     IExceptionViewClassifier,
+    IException,
     IMultiView,
     IPackageOverrides,
     IRendererFactory,
@@ -43,7 +44,6 @@ from pyramid.compat import (
 from pyramid.decorator import reify
 
 from pyramid.exceptions import (
-    isexception,
     ConfigurationError,
     PredicateMismatch,
     )
@@ -511,17 +511,12 @@ class ViewsConfiguratorMixin(object):
           .. versionadded:: 1.8
 
           An object or a :term:`dotted Python name` referring to an
-          interface or class object that an exception must be an instance of,
-          or the :term:`interface` that an exception must provide in order
-          for this view to be found and called. This predicate is true when
-          the :term:`context` is an instance of the represented class or if
-          the :term:`context` provides the represented interface; it is
-          otherwise false. The actual exception object is provided to the
-          view as the ``context`` argument or ``request.exception``. This
-          argument conflicts with ``context`` and should be used if the view
-          is an :term:`exception view`. If this option is used instead of
-          ``context`` then the :term:`view deriver` pipeline will be able
-          to optimize itself on that information.
+          exception class. This predicate is true when the view is processing
+          an exception instead of the :term:`context` derived from the request.
+          The actual exception object is provided to the view as the
+          ``context`` argument or ``request.exception``. This argument
+          conflicts with ``context`` and should be used if the view is an
+          :term:`exception view`.
 
         route_name
 
@@ -795,6 +790,9 @@ class ViewsConfiguratorMixin(object):
             raise ConfigurationError(
                 'view "exception" must be an exception type')
 
+        if isexc:
+            exception = context
+
         r_context = context
         if r_context is None:
             r_context = Interface
@@ -869,6 +867,7 @@ class ViewsConfiguratorMixin(object):
             name=name,
             context=context,
             exception=exception,
+            exception_only=isexc_only,
             containment=containment,
             request_param=request_param,
             request_methods=request_method,
@@ -927,6 +926,7 @@ class ViewsConfiguratorMixin(object):
                 attr=attr,
                 context=context,
                 exception=exception,
+                exception_only=isexc_only,
                 renderer=renderer,
                 wrapper_viewname=wrapper,
                 viewname=name,
@@ -1373,7 +1373,8 @@ class ViewsConfiguratorMixin(object):
                      viewname=None, accept=None, order=MAX_ORDER,
                      phash=DEFAULT_PHASH, decorator=None, route_name=None,
                      mapper=None, http_cache=None, context=None,
-                     require_csrf=None, exception=None, extra_options=None):
+                     require_csrf=None, exception=None, exception_only=False,
+                     extra_options=None):
         view = self.maybe_dotted(view)
         mapper = self.maybe_dotted(mapper)
         if isinstance(renderer, string_types):
@@ -1392,6 +1393,7 @@ class ViewsConfiguratorMixin(object):
             view=view,
             context=context,
             exception=exception,
+            exception_only=exception_only,
             permission=permission,
             attr=attr,
             renderer=renderer,
@@ -1881,6 +1883,15 @@ class ViewsConfiguratorMixin(object):
             info = StaticURLInfo()
             self.registry.registerUtility(info, IStaticURLInfo)
         return info
+
+def isexception(o):
+    if IInterface.providedBy(o):
+        if IException.isEqualOrExtendedBy(o):
+            return True
+    return (
+        isinstance(o, Exception) or
+        (inspect.isclass(o) and (issubclass(o, Exception)))
+        )
 
 @implementer(IViewDeriverInfo)
 class ViewDeriverInfo(object):

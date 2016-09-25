@@ -35,7 +35,6 @@ from pyramid.config.util import (
     )
 
 from pyramid.exceptions import (
-    isexception,
     ConfigurationError,
     PredicateMismatch,
     )
@@ -288,7 +287,7 @@ def _secured_view(view, info):
     authz_policy = info.registry.queryUtility(IAuthorizationPolicy)
 
     # no-op on exception-only views without an explicit permission
-    if explicit_val is None and info.options.get('exception') is not None:
+    if explicit_val is None and info.options.get('exception_only'):
         return view
 
     if authn_policy and authz_policy and (permission is not None):
@@ -305,7 +304,7 @@ def _secured_view(view, info):
                 'Unauthorized: %s failed permission check' % view_name)
             raise HTTPForbidden(msg, result=result)
         # check for exceptions per-request if view could handle an exception
-        if isexception(info.options.get('context')):
+        if info.options.get('exception'):
             def exc_secured_view(context, request):
                 if (
                     explicit_val is None and
@@ -333,7 +332,7 @@ def _authdebug_view(view, info):
     logger = info.registry.queryUtility(IDebugLogger)
 
     # no-op on exception-only views without an explicit permission
-    if explicit_val is None and info.options.get('exception') is not None:
+    if explicit_val is None and info.options.get('exception_only'):
         return view
 
     if settings and settings.get('debug_authorization', False):
@@ -362,7 +361,7 @@ def _authdebug_view(view, info):
                 request.authdebug_message = msg
             return view(context, request)
         # check for exceptions per-request if view could handle an exception
-        if isexception(info.options.get('context')):
+        if info.options.get('exception'):
             def exc_authdebug_view(context, request):
                 if (
                     explicit_val is None and
@@ -516,7 +515,7 @@ def csrf_view(view, info):
         # but disable on exception-only views without an explicit permission
         (
             explicit_val is not False and default_val
-            and not info.options.get('exception')
+            and not info.options.get('exception_only')
         )
     )
     # disable if both header and token are disabled
@@ -529,7 +528,7 @@ def csrf_view(view, info):
                 check_csrf_token(request, token, header, raises=True)
             return view(context, request)
         # check for exceptions per-request if view could handle an exception
-        if isexception(info.options.get('context')):
+        if info.options.get('exception'):
             def exc_csrf_view(context, request):
                 if (
                     # skip exception views unless value is explicitly defined
