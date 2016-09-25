@@ -512,7 +512,12 @@ def csrf_view(view, info):
 
     enabled = (
         explicit_val is True or
-        (explicit_val is not False and default_val)
+        # fallback to the default val if not explicitly enabled
+        # but disable on exception-only views without an explicit permission
+        (
+            explicit_val is not False and default_val
+            and not info.options.get('exception')
+        )
     )
     # disable if both header and token are disabled
     enabled = enabled and (token or header)
@@ -528,7 +533,7 @@ def csrf_view(view, info):
             def exc_csrf_view(context, request):
                 if (
                     # skip exception views unless value is explicitly defined
-                    explicit_val is None and
+                    not explicit_val and
                     getattr(request, 'exception', None) is not None
                 ):
                     return view(context, request)
