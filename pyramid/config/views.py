@@ -782,14 +782,16 @@ class ViewsConfiguratorMixin(object):
         if context is None:
             context = for_
 
+        isexc_only = False
         if exception is not None:
             if context is not None:
                 raise ConfigurationError('view "context" and "exception" '
                                          'arguments are mutually exclusive')
             context = exception
+            isexc_only = True
 
         isexc = isexception(context)
-        if not isexc and exception is not None:
+        if isexc_only and not isexc:
             raise ConfigurationError(
                 'view "exception" must be an exception type')
 
@@ -945,7 +947,7 @@ class ViewsConfiguratorMixin(object):
 
             # make a new view separately for normal and exception paths
             view_classifiers = []
-            if exception is None:
+            if not isexc_only:
                 view_classifiers.append(IViewClassifier)
             if isexc:
                 view_classifiers.append(IExceptionViewClassifier)
