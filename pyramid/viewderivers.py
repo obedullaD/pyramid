@@ -514,8 +514,8 @@ def csrf_view(view, info):
         # fallback to the default val if not explicitly enabled
         # but disable on exception-only views without an explicit permission
         (
-            explicit_val is not False and default_val
-            and not info.exception_only
+            explicit_val is not False and default_val and
+            not info.exception_only
         )
     )
     # disable if both header and token are disabled
