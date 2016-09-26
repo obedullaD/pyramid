@@ -1898,11 +1898,23 @@ class TestViewsConfigurationMixin(unittest.TestCase):
         from pyramid.renderers import null_renderer
         view1 = lambda *arg: 'OK'
         config = self._makeOne(autocommit=True)
-        config.add_exception_view(view=view1, exception=Exception,
-                                  renderer=null_renderer)
+        config.add_exception_view(view=view1, renderer=null_renderer)
         wrapper = self._getViewCallable(
             config, exc_iface=implementedBy(Exception))
         context = Exception()
+        request = self._makeRequest(config)
+        self.assertEqual(wrapper(context, request), 'OK')
+
+    def test_add_exception_view_with_subclass(self):
+        from zope.interface import implementedBy
+        from pyramid.renderers import null_renderer
+        view1 = lambda *arg: 'OK'
+        config = self._makeOne(autocommit=True)
+        config.add_exception_view(view=view1, exception=ValueError,
+                                  renderer=null_renderer)
+        wrapper = self._getViewCallable(
+            config, exc_iface=implementedBy(ValueError))
+        context = ValueError()
         request = self._makeRequest(config)
         self.assertEqual(wrapper(context, request), 'OK')
 
@@ -1940,12 +1952,6 @@ class TestViewsConfigurationMixin(unittest.TestCase):
                           config.add_exception_view,
                           context=Exception(),
                           exception_only=True)
-
-    def test_add_exception_view_requires_context(self):
-        config = self._makeOne(autocommit=True)
-        view = lambda *a: 'OK'
-        self.assertRaises(ConfigurationError,
-                          config.add_exception_view, view=view)
 
     def test_add_exception_view_with_view_defaults(self):
         from pyramid.renderers import null_renderer

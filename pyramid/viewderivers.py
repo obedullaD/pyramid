@@ -287,7 +287,7 @@ def _secured_view(view, info):
     authz_policy = info.registry.queryUtility(IAuthorizationPolicy)
 
     # no-op on exception-only views without an explicit permission
-    if explicit_val is None and info.options.get('exception_only'):
+    if explicit_val is None and info.exception_only:
         return view
 
     if authn_policy and authz_policy and (permission is not None):
@@ -332,7 +332,7 @@ def _authdebug_view(view, info):
     logger = info.registry.queryUtility(IDebugLogger)
 
     # no-op on exception-only views without an explicit permission
-    if explicit_val is None and info.options.get('exception_only'):
+    if explicit_val is None and info.exception_only:
         return view
 
     if settings and settings.get('debug_authorization', False):
@@ -515,7 +515,7 @@ def csrf_view(view, info):
         # but disable on exception-only views without an explicit permission
         (
             explicit_val is not False and default_val
-            and not info.options.get('exception_only')
+            and not info.exception_only
         )
     )
     # disable if both header and token are disabled

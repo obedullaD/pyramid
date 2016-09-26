@@ -17,7 +17,10 @@ from pyramid.interfaces import (
 
 from pyramid.compat import decode_path_info
 
-from pyramid.exceptions import PredicateMismatch
+from pyramid.exceptions import (
+    ConfigurationError,
+    PredicateMismatch,
+)
 
 from pyramid.httpexceptions import (
     HTTPFound,
@@ -473,11 +476,12 @@ class exception_view_config(object):
     :term:`exception view` using
     :meth:`pyramid.config.Configurator.add_exception_view`.
 
-    The exception_view_config constructor requires an exception context, and
-    additionally accepts most of the same arguments as the constructor of
+    The ``exception_view_config`` constructor requires an exception context,
+    and additionally accepts most of the same arguments as the constructor of
     :class:`pyramid.view.view_config`.  It can be used in the same places,
-    and behaves in largely the same way, except it always registers an exception
-    view instead of a 'normal' view.
+    and behaves in largely the same way, except it always registers an
+    exception view instead of a 'normal' view that dispatches on the request
+    :term:`context`.
 
     Example:
 
@@ -486,17 +490,23 @@ class exception_view_config(object):
         from pyramid.view import exception_view_config
         from pyramid.response import Response
 
-        @exception_view_config(exception=ValueError, renderer='json')
+        @exception_view_config(ValueError, renderer='json')
         def error_view(request):
             return {'error': str(request.exception)}
 
     All arguments passed to this function have the same meaning as
     :meth:`pyramid.view.view_config` and each predicate argument restricts
     the set of circumstances under which this exception view will be invoked.
+
     """
     venusian = venusian
 
-    def __init__(self, **settings):
+    def __init__(self, *args, **settings):
+        if 'exception' not in settings and len(args) > 0:
+            exception, args = args[0], args[1:]
+            settings['exception'] = exception
+        if len(args) > 0:
+            raise ConfigurationError('unknown positional arguments')
         self.__dict__.update(settings)
 
     def __call__(self, wrapped):

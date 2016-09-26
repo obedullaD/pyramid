@@ -790,6 +790,8 @@ class ViewsConfiguratorMixin(object):
             raise ConfigurationError(
                 'view "exception" must be an exception type')
 
+        # ensure we always declare exception info if it is just passed as
+        # the "context" argument
         if isexc:
             exception = context
 
@@ -1393,7 +1395,6 @@ class ViewsConfiguratorMixin(object):
             view=view,
             context=context,
             exception=exception,
-            exception_only=exception_only,
             permission=permission,
             attr=attr,
             renderer=renderer,
@@ -1414,6 +1415,7 @@ class ViewsConfiguratorMixin(object):
             registry=self.registry,
             package=self.package,
             predicates=predicates,
+            exception_only=exception_only,
             options=options,
         )
 
@@ -1655,64 +1657,38 @@ class ViewsConfiguratorMixin(object):
     def add_exception_view(
         self,
         view=None,
-        exception=None,
-        attr=None,
-        renderer=None,
-        wrapper=None,
-        route_name=None,
-        request_type=None,
-        request_method=None,
-        request_param=None,
-        containment=None,
-        xhr=None,
-        accept=None,
-        header=None,
-        path_info=None,
-        custom_predicates=(),
-        decorator=None,
-        mapper=None,
-        match_param=None,
+        exception=Exception,
+        # force all other arguments to be specified as key=value
         **view_options
-            ):
+        ):
         """ Add an :term:`exception view` for the specified ``exception`` to
         the current configuration state. The view will be called when Pyramid
         or application code raises the given exception.
 
+        This method accepts accepts almost all of the same arguments as
+        :meth:`pyramid.config.Configurator.add_view` except for ``name``,
+        ``permissions``, ``context``, ``for_``, and ``require_csrf``.
+
+        By default, this method will set ``exception=Exception`` thus
+        registering for most default Python exceptions. Any subclass of
+        ``Exception`` may be specified.
+
         .. versionadded:: 1.8
         """
-        for arg in (
-            'name', 'permission', 'context', 'for_', 'http_cache',
-            'require_csrf',
-        ):
+        for arg in ('name', 'context', 'for_', 'permission', 'require_csrf'):
             if arg in view_options:
                 raise ConfigurationError(
                     '%s may not be used as an argument to add_exception_view'
-                    % arg
-                    )
+                    % (arg,))
         if exception is None:
             raise ConfigurationError('"exception" must be specified for view')
-        settings = dict(
+        view_options.update(dict(
             view=view,
             exception=exception,
-            wrapper=wrapper,
-            renderer=renderer,
-            request_type=request_type,
-            request_method=request_method,
-            request_param=request_param,
-            containment=containment,
-            xhr=xhr,
-            accept=accept,
-            header=header,
-            path_info=path_info,
-            custom_predicates=custom_predicates,
-            decorator=decorator,
-            mapper=mapper,
-            match_param=match_param,
-            route_name=route_name,
             permission=NO_PERMISSION_REQUIRED,
             require_csrf=False,
-            )
-        return self.add_view(**settings)
+        ))
+        return self.add_view(**view_options)
 
     @action_method
     def set_view_mapper(self, mapper):
@@ -1895,12 +1871,20 @@ def isexception(o):
 
 @implementer(IViewDeriverInfo)
 class ViewDeriverInfo(object):
-    def __init__(self, view, registry, package, predicates, options):
+    def __init__(self,
+                 view,
+                 registry,
+                 package,
+                 predicates,
+                 exception_only,
+                 options,
+                 ):
         self.original_view = view
         self.registry = registry
         self.package = package
         self.predicates = predicates or []
         self.options = options or {}
+        self.exception_only = exception_only
 
     @reify
     def settings(self):
